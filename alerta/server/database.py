@@ -319,11 +319,13 @@ class Mongo(object):
             graph_urls=response['graphUrls'],
         )
 
-    def update_status(self, alertid=None, alert=None, status=None):
+    def update_status(self, alertid=None, resource=None, alert=None, status=None):
 
         if alertid:
             query = {'$or': [{'_id': {'$regex': '^' + alertid}},
                     {'lastReceiveId': {'$regex': '^' + alertid}}]}
+        elif resource:
+            query = {"resource": resource}
         else:
             query = {"environment": alert.environment, "resource": alert.resource,
                      '$or': [{"event": alert.event}, {"correlatedEvents": alert.event}]}

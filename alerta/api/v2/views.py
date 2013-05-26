@@ -301,8 +301,28 @@ def delete_resource(resource):
 
     error = None
 
+    # Update a single alert
+    if request.method == 'PUT':
+        if request.json:
+            modifiedAlert = db.modify_resource(resource=resource, update=request.json)
+            if 'status' in request.json:
+                modifiedAlert = db.update_status(resource=resource, status=request.json['status'])
+
+                # Forward alert to notify topic and logger queue
+                mq.send(modifiedAlert, CONF.outbound_queue)
+                mq.send(modifiedAlert, CONF.outbound_topic)
+                LOG.info('%s : Alert forwarded to %s and %s', modifiedAlert.get_id(), CONF.outbound_queue, CONF.outbound_topic)
+        else:
+            modifiedAlert = None
+            error = "no post data"
+
+        if modifiedAlert:
+            return jsonify(response={"status": "ok"})
+        else:
+            return jsonify(response={"status": "error", "message": error})
+
     # Delete all alerts for a single resource
-    if request.method == 'DELETE' or (request.method == 'POST' and request.json['_method'] == 'delete'):
+    elif request.method == 'DELETE' or (request.method == 'POST' and request.json['_method'] == 'delete'):
         response = db.delete_resource(resource)
 
         if response:
