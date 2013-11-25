@@ -1,0 +1,1 @@
+db.addUser("alerta","8l3rt8", false)

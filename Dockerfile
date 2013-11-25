@@ -1,64 +1,30 @@
 FROM  ubuntu
 
+#RUN   apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10
+RUN   echo 'deb http://downloads-distro.mongodb.org/repo/debian-sysvinit dist 10gen' | tee /etc/apt/sources.list.d/mongodb.list
+RUN   sed -i 's/main$/main universe/' /etc/apt/sources.list
+
 #Packages
 RUN   apt-get update
-RUN   apt-get install mongodb-server rabbitmq-server python-pip wget git build-essential supervisor -y
+RUN   apt-get install git-core python-pip build-essential python-dev libevent1-dev mongodb-10gen rabbitmq-server python-dev wget build-essential supervisor -y --force-yes
 
 #RabbitMQ
 RUN   /usr/lib/rabbitmq/bin/rabbitmq-plugins enable rabbitmq_stomp
 RUN   /usr/lib/rabbitmq/bin/rabbitmq-plugins enable rabbitmq_management
-RUN   service rabbitmq-server restart
 
-RUN   wget http://guest:guest@10.250.76.174:15672/cli/rabbitmqadmin && chmod +x rabbitmqadmin
-RUN   ./rabbitmqadmin declare exchange name=alerts type=fanout
+RUN mkdir -p /data/db/
 
-RUN pip install virtualenv virtualenvwrapper
+ADD docker/alerta.conf /root/alerta.conf
+ADD docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf 
 
-RUN export WORKON_HOME=$HOME/.virtualenvs && mkdir -p $WORKON_HOME && source /usr/local/bin/virtualenvwrapper.sh && mkvirtualenv alerta
+ADD . /alerta
+RUN cd /alerta && pip install -r requirements.txt && python setup.py install
 
+RUN chmod +x /alerta/bin/alerta-dashboard
 
-ADD . alerta
-RUN cd alerta && sudo pip install -r requirements.txt && sudo python setup.py install
+EXPOSE 8080
+EXPOSE 5000 
+EXPOSE 27017
+EXPOSE 5672 15672
 
-[DEFAULT]
-log_dir = /tmp
-mongo_username = alerta
-mongo_password = 8l3rt8
-api_host = x.x.x.x             <---- replace with actual IP address
-
-[alerta-dashboard]
-dashboard_dir = /path/to/alerta/dashboard/v2/assets/
-
-
-#Add these to supervisord
-[supervisord]
-nodaemon=true
-
-[program:alerta]
-command=/root/alertavirtual/bin/alerta -f
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
-autorestart=true
-
-
-[program:alerta-api]
-command=/root/alertavirtual/bin/alerta-api
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
-autorestart=true
-
-
-
-[program:alerta-dashboard]
-command=/root/alertavirtual/bin/alerta-dashboard
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
-autorestart=true
-
-#Run these scripts from mongo command line console
-$ mongo
-MongoDB shell version: 2.0.4
-connecting to: test
-> use monitoring
-switched to db monitoring
-> db.addUser("alerta","8l3rt8", false)
+CMD ["supervisord", "-n"]
